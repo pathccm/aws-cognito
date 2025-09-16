@@ -166,7 +166,7 @@ components:
             generate_secret: true
         # Configure risk settings for specific clients
         risk_configurations:
-          - client_id: "web-app"
+          - client_id: "${module.cognito.client_ids_map['web-app']}"
             account_takeover_risk_configuration:
               actions:
                 high_action:
@@ -178,12 +178,14 @@ components:
                 low_action:
                   event_action: "NO_ACTION"
                   notify: false
-          - client_id: "mobile-app"
+          - client_id: "${module.cognito.client_ids_map['mobile-app']}"
             compromised_credentials_risk_configuration:
               event_filter: ["SIGN_IN"]
               actions:
                 event_action: "BLOCK"
 ```
+
+**Note:** `client_id` must be the app client ID, not the client name. Resolve it (e.g., via `outputs.client_ids_map`) before passing here.
 
 #### Comprehensive Risk Configuration
 

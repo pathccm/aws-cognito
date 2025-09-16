@@ -33,11 +33,11 @@ resource "aws_cognito_risk_configuration" "risk_config" {
   client_id    = lookup(element(local.risk_configurations, count.index), "client_id", null)
 
   dynamic "account_takeover_risk_configuration" {
-    for_each = length(lookup(element(local.risk_configurations, count.index), "account_takeover_risk_configuration", {})) > 0 ? [lookup(element(local.risk_configurations, count.index), "account_takeover_risk_configuration", {})] : []
+    for_each = length(coalesce(lookup(element(local.risk_configurations, count.index), "account_takeover_risk_configuration", null), {})) > 0 ? [coalesce(lookup(element(local.risk_configurations, count.index), "account_takeover_risk_configuration", null), {})] : []
 
     content {
       dynamic "notify_configuration" {
-        for_each = lookup(account_takeover_risk_configuration.value, "notify_configuration", null) != null ? [lookup(account_takeover_risk_configuration.value, "notify_configuration", {})] : []
+        for_each = length(coalesce(lookup(account_takeover_risk_configuration.value, "notify_configuration", null), {})) > 0 ? [coalesce(lookup(account_takeover_risk_configuration.value, "notify_configuration", null), {})] : []
 
         content {
           dynamic "block_email" {
@@ -77,7 +77,7 @@ resource "aws_cognito_risk_configuration" "risk_config" {
       }
 
       dynamic "actions" {
-        for_each = lookup(account_takeover_risk_configuration.value, "actions", null) != null ? [lookup(account_takeover_risk_configuration.value, "actions", {})] : []
+        for_each = length(coalesce(lookup(account_takeover_risk_configuration.value, "actions", null), {})) > 0 ? [coalesce(lookup(account_takeover_risk_configuration.value, "actions", null), {})] : []
 
         content {
           dynamic "high_action" {
@@ -112,13 +112,13 @@ resource "aws_cognito_risk_configuration" "risk_config" {
   }
 
   dynamic "compromised_credentials_risk_configuration" {
-    for_each = length(lookup(element(local.risk_configurations, count.index), "compromised_credentials_risk_configuration", {})) > 0 ? [lookup(element(local.risk_configurations, count.index), "compromised_credentials_risk_configuration", {})] : []
+    for_each = length(coalesce(lookup(element(local.risk_configurations, count.index), "compromised_credentials_risk_configuration", null), {})) > 0 ? [coalesce(lookup(element(local.risk_configurations, count.index), "compromised_credentials_risk_configuration", null), {})] : []
 
     content {
       event_filter = lookup(compromised_credentials_risk_configuration.value, "event_filter", null)
 
       dynamic "actions" {
-        for_each = lookup(compromised_credentials_risk_configuration.value, "actions", null) != null ? [lookup(compromised_credentials_risk_configuration.value, "actions", {})] : []
+        for_each = length(coalesce(lookup(compromised_credentials_risk_configuration.value, "actions", null), {})) > 0 ? [coalesce(lookup(compromised_credentials_risk_configuration.value, "actions", null), {})] : []
 
         content {
           event_action = lookup(actions.value, "event_action", null)
@@ -131,7 +131,7 @@ resource "aws_cognito_risk_configuration" "risk_config" {
   # Supports blocked and skipped IP ranges in CIDR notation
   # AWS limits: Maximum 200 IP ranges per list
   dynamic "risk_exception_configuration" {
-    for_each = length(lookup(element(local.risk_configurations, count.index), "risk_exception_configuration", {})) > 0 ? [lookup(element(local.risk_configurations, count.index), "risk_exception_configuration", {})] : []
+    for_each = length(coalesce(lookup(element(local.risk_configurations, count.index), "risk_exception_configuration", null), {})) > 0 ? [coalesce(lookup(element(local.risk_configurations, count.index), "risk_exception_configuration", null), {})] : []
 
     content {
       # IP ranges that should always be blocked (CIDR notation, max 200 items)
