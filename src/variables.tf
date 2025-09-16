@@ -559,3 +559,33 @@ variable "deletion_protection" {
   type        = string
   default     = "INACTIVE"
 }
+
+variable "risk_configurations" {
+  description = "List of risk configuration objects for the User Pool. Each configuration can be applied globally or to specific clients"
+  type        = list(any)
+  default     = []
+}
+
+variable "risk_configuration_client_id" {
+  description = "The app client ID for risk configuration. If not provided, applies to all clients in the User Pool"
+  type        = string
+  default     = null
+}
+
+variable "account_takeover_risk_configuration" {
+  description = "Account takeover risk configuration settings. Configures detection and response to suspicious authentication attempts"
+  type        = any
+  default     = {}
+}
+
+variable "compromised_credentials_risk_configuration" {
+  description = "Compromised credentials risk configuration settings. Configures detection of known compromised passwords"
+  type        = any
+  default     = {}
+}
+
+variable "risk_exception_configuration" {
+  description = "Risk exception configuration for IP-based overrides. Allows blocking or bypassing risk detection for specific IP ranges"
+  type        = any
+  default     = {}
+}
