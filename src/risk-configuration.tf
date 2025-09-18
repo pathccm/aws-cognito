@@ -1,29 +1,42 @@
 locals {
-  # Default configuration using individual variables
-  risk_configuration_default = {
-    client_id                                  = var.risk_configuration_client_id
-    account_takeover_risk_configuration        = var.account_takeover_risk_configuration
-    compromised_credentials_risk_configuration = var.compromised_credentials_risk_configuration
-    risk_exception_configuration               = var.risk_exception_configuration
-  }
-
-  # Process provided configurations
-  risk_configurations_provided = [for config in var.risk_configurations : {
-    client_id                                  = lookup(config, "client_id", null)
-    account_takeover_risk_configuration        = lookup(config, "account_takeover_risk_configuration", {})
-    compromised_credentials_risk_configuration = lookup(config, "compromised_credentials_risk_configuration", {})
-    risk_exception_configuration               = lookup(config, "risk_exception_configuration", {})
-  }]
-
-  # Determine if any individual risk configuration is provided
-  has_individual_risk_config = (
-    length(var.account_takeover_risk_configuration) > 0 ||
-    length(var.compromised_credentials_risk_configuration) > 0 ||
-    length(var.risk_exception_configuration) > 0
+  # Helper function to check if a configuration object has meaningful content
+  has_account_takeover_config = length(var.account_takeover_risk_configuration) > 0 && (
+    lookup(var.account_takeover_risk_configuration, "actions", null) != null ||
+    lookup(var.account_takeover_risk_configuration, "notify_configuration", null) != null
   )
 
+  has_compromised_credentials_config = length(var.compromised_credentials_risk_configuration) > 0 && (
+    lookup(var.compromised_credentials_risk_configuration, "actions", null) != null ||
+    lookup(var.compromised_credentials_risk_configuration, "event_filter", null) != null
+  )
+
+  has_risk_exception_config = length(var.risk_exception_configuration) > 0 && (
+    (lookup(var.risk_exception_configuration, "blocked_ip_range_list", null) != null && length(lookup(var.risk_exception_configuration, "blocked_ip_range_list", [])) > 0) ||
+    (lookup(var.risk_exception_configuration, "skipped_ip_range_list", null) != null && length(lookup(var.risk_exception_configuration, "skipped_ip_range_list", [])) > 0)
+  )
+
+  # Default configuration using individual variables (only if they have meaningful content)
+  risk_configuration_default = local.has_account_takeover_config || local.has_compromised_credentials_config || local.has_risk_exception_config ? {
+    client_id                                  = var.risk_configuration_client_id
+    account_takeover_risk_configuration        = local.has_account_takeover_config ? var.account_takeover_risk_configuration : null
+    compromised_credentials_risk_configuration = local.has_compromised_credentials_config ? var.compromised_credentials_risk_configuration : null
+    risk_exception_configuration               = local.has_risk_exception_config ? var.risk_exception_configuration : null
+  } : null
+
+  # Process provided configurations - only include configurations that have meaningful content
+  risk_configurations_provided = [for config in var.risk_configurations : {
+    client_id                                  = lookup(config, "client_id", null)
+    account_takeover_risk_configuration        = length(lookup(config, "account_takeover_risk_configuration", {})) > 0 ? lookup(config, "account_takeover_risk_configuration", {}) : null
+    compromised_credentials_risk_configuration = length(lookup(config, "compromised_credentials_risk_configuration", {})) > 0 ? lookup(config, "compromised_credentials_risk_configuration", {}) : null
+    risk_exception_configuration               = length(lookup(config, "risk_exception_configuration", {})) > 0 ? lookup(config, "risk_exception_configuration", {}) : null
+    } if(
+    length(lookup(config, "account_takeover_risk_configuration", {})) > 0 ||
+    length(lookup(config, "compromised_credentials_risk_configuration", {})) > 0 ||
+    length(lookup(config, "risk_exception_configuration", {})) > 0
+  )]
+
   # Determine final configuration list
-  risk_configurations = length(var.risk_configurations) == 0 && local.has_individual_risk_config ? [local.risk_configuration_default] : local.risk_configurations_provided
+  risk_configurations = length(var.risk_configurations) == 0 && local.risk_configuration_default != null ? [local.risk_configuration_default] : local.risk_configurations_provided
 }
 
 resource "aws_cognito_risk_configuration" "risk_config" {
@@ -33,11 +46,12 @@ resource "aws_cognito_risk_configuration" "risk_config" {
   client_id    = lookup(element(local.risk_configurations, count.index), "client_id", null)
 
   dynamic "account_takeover_risk_configuration" {
-    for_each = length(coalesce(lookup(element(local.risk_configurations, count.index), "account_takeover_risk_configuration", null), {})) > 0 ? [coalesce(lookup(element(local.risk_configurations, count.index), "account_takeover_risk_configuration", null), {})] : []
+    for_each = lookup(element(local.risk_configurations, count.index), "account_takeover_risk_configuration", null) != null && length(lookup(element(local.risk_configurations, count.index), "account_takeover_risk_configuration", {})) > 0 ? [lookup(element(local.risk_configurations, count.index), "account_takeover_risk_configuration", {})] : []
 
     content {
       dynamic "notify_configuration" {
-        for_each = length(coalesce(lookup(account_takeover_risk_configuration.value, "notify_configuration", null), {})) > 0 ? [coalesce(lookup(account_takeover_risk_configuration.value, "notify_configuration", null), {})] : []
+        # AWS requires notify_configuration when account_takeover_risk_configuration is present
+        for_each = lookup(account_takeover_risk_configuration.value, "notify_configuration", null) != null ? [lookup(account_takeover_risk_configuration.value, "notify_configuration", {})] : []
 
         content {
           dynamic "block_email" {
@@ -77,7 +91,8 @@ resource "aws_cognito_risk_configuration" "risk_config" {
       }
 
       dynamic "actions" {
-        for_each = length(coalesce(lookup(account_takeover_risk_configuration.value, "actions", null), {})) > 0 ? [coalesce(lookup(account_takeover_risk_configuration.value, "actions", null), {})] : []
+        # AWS requires actions when account_takeover_risk_configuration is present
+        for_each = lookup(account_takeover_risk_configuration.value, "actions", null) != null ? [lookup(account_takeover_risk_configuration.value, "actions", {})] : []
 
         content {
           dynamic "high_action" {
@@ -112,13 +127,14 @@ resource "aws_cognito_risk_configuration" "risk_config" {
   }
 
   dynamic "compromised_credentials_risk_configuration" {
-    for_each = length(coalesce(lookup(element(local.risk_configurations, count.index), "compromised_credentials_risk_configuration", null), {})) > 0 ? [coalesce(lookup(element(local.risk_configurations, count.index), "compromised_credentials_risk_configuration", null), {})] : []
+    for_each = lookup(element(local.risk_configurations, count.index), "compromised_credentials_risk_configuration", null) != null && length(lookup(element(local.risk_configurations, count.index), "compromised_credentials_risk_configuration", {})) > 0 ? [lookup(element(local.risk_configurations, count.index), "compromised_credentials_risk_configuration", {})] : []
 
     content {
       event_filter = lookup(compromised_credentials_risk_configuration.value, "event_filter", null)
 
       dynamic "actions" {
-        for_each = length(coalesce(lookup(compromised_credentials_risk_configuration.value, "actions", null), {})) > 0 ? [coalesce(lookup(compromised_credentials_risk_configuration.value, "actions", null), {})] : []
+        # AWS requires actions when compromised_credentials_risk_configuration is present
+        for_each = lookup(compromised_credentials_risk_configuration.value, "actions", null) != null ? [lookup(compromised_credentials_risk_configuration.value, "actions", {})] : []
 
         content {
           event_action = lookup(actions.value, "event_action", null)
@@ -130,8 +146,12 @@ resource "aws_cognito_risk_configuration" "risk_config" {
   # Risk exception configuration for IP-based overrides
   # Supports blocked and skipped IP ranges in CIDR notation
   # AWS limits: Maximum 200 IP ranges per list
+  # AWS requires at least one of blocked_ip_range_list or skipped_ip_range_list
   dynamic "risk_exception_configuration" {
-    for_each = length(coalesce(lookup(element(local.risk_configurations, count.index), "risk_exception_configuration", null), {})) > 0 ? [coalesce(lookup(element(local.risk_configurations, count.index), "risk_exception_configuration", null), {})] : []
+    for_each = lookup(element(local.risk_configurations, count.index), "risk_exception_configuration", null) != null && length(lookup(element(local.risk_configurations, count.index), "risk_exception_configuration", {})) > 0 && (
+      lookup(lookup(element(local.risk_configurations, count.index), "risk_exception_configuration", {}), "blocked_ip_range_list", null) != null ||
+      lookup(lookup(element(local.risk_configurations, count.index), "risk_exception_configuration", {}), "skipped_ip_range_list", null) != null
+    ) ? [lookup(element(local.risk_configurations, count.index), "risk_exception_configuration", {})] : []
 
     content {
       # IP ranges that should always be blocked (CIDR notation, max 200 items)
