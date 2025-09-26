@@ -11,8 +11,8 @@ locals {
   )
 
   has_risk_exception_config = length(var.risk_exception_configuration) > 0 && (
-    (lookup(var.risk_exception_configuration, "blocked_ip_range_list", null) != null && length(lookup(var.risk_exception_configuration, "blocked_ip_range_list", [])) > 0) ||
-    (lookup(var.risk_exception_configuration, "skipped_ip_range_list", null) != null && length(lookup(var.risk_exception_configuration, "skipped_ip_range_list", [])) > 0)
+    length(coalesce(lookup(var.risk_exception_configuration, "blocked_ip_range_list", null), [])) > 0 ||
+    length(coalesce(lookup(var.risk_exception_configuration, "skipped_ip_range_list", null), [])) > 0
   )
 
   # Default configuration using individual variables (only if they have meaningful content)
